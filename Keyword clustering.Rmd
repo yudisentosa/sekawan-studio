@@ -1,0 +1,139 @@
+---
+title: "Clustering Keyword SEO"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Project SEO Clustering
+
+In this project, we will do clustering any keyword from words permutation. Before we begin, make sure the data is already collected. You can collect it from various SEO tools website such as ahref, moz, SE tracker, etc.
+
+Variables that used in this project are Search Volume (SV) and Keyword Difficulties (KD). It collected from MOZ SEO tools at Monday, 27 September 2021. We will use k-means clustering and determine the number of k later in this project.
+
+```{r load pacakage, echo = FALSE}
+#load packages
+library(tidyverse)  # data manipulation
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+library(ggplot2)    # convert kmeans into df
+library(gridExtra)  # shows extra grid for plot comparing
+set.seed(123)       # set seed is for locking the random variable (k centroid) ,so it return the same number even it run again
+```
+
+//Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+The chunks below required import data, the parameter (or column) should be followed with the requirement.
+
+```{r import data, echo = FALSE}
+smkeywords <- read_csv("D:/Mirror/zz/Universitas/T4 Semester 
+                       7/Intern/Sekawan Studio Intern/Cluster 1/SM.csv")
+head(smkeywords)
+```
+
+##Clean the data
+
+This is a **mandatory** process. In this chunk, I am separating the group variable based on group. Take note that, the data should only contain *number*, so you could change the rownames to the keyword names (yes, it should be unique). Since the variable of the data is distinct (not in a same meatric of measurment), it should be scaled.
+
+```{r cleaning ,results='hide'}
+#cleaning data
+smservicesgeo <- subset(smkeywords, category1 == 'Services' & 
+                                    sv < 6000 & 
+                                    itention == 'geo')
+data1 <- as.data.frame(scale(select(smservicesgeo, sv:octr)))
+row.names(data1) <- smservicesgeo$keyword
+```
+
+##Data Assestment
+For the visual assessment of clustering tendency, we start by computing the dissimilarity matrix between observations using the function dist(). Next the function fviz_dist() \[factoextra package\] is used to display the dissimilarity matrix.
+
+```{r}
+#show heat plot
+distance <- get_dist(data1)
+fviz_dist(distance, show_labels = FALSE)
+```
+
+##K-means Clustering
+K-means clustering (MacQueen, 1967) is the most commonly used unsupervised machine learning algorithm for partitioning a given data set into a set of k groups (i.e. k clusters), where k represents the number of groups pre-specified by the analyst.
+
+```{r}
+#show clustering 2<=k<=5
+k2 <- kmeans(data1, centers = 2, nstart = 25)
+k3 <- kmeans(data1, centers = 3, nstart = 25)
+k4 <- kmeans(data1, centers = 4, nstart = 25)
+k5 <- kmeans(data1, centers = 5, nstart = 25)
+
+#we specify nstart = 25. This means that R will try 25 different random
+#starting assignments and then select the best results corresponding 
+#to the one with the lowest within cluster variation.
+
+# plots to compare
+p1 <- fviz_cluster(k2, geom = "point", data = data1) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point",  data = data1) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point",  data = data1) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point",  data = data1) + ggtitle("k = 5")
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+
+###Optimalization
+Chossing the right k for k-mean clustering
+```{r}
+fviz_nbclust(data1, kmeans, method = "wss")
+fviz_nbclust(data1, kmeans, method = "silhouette")
+```
+
+##PAM
+Since the result of k-means clustering is not good enough, so we try different method. PAM (Partitioning Around Medoids) is alternatice clustering methods beside k-means. In simply explanation, because the data contain many outlier (as seen on the graph), so it could be bad if we use k-means clustering as the approach method (the means will be large), and the better approach is using the PAM Methods that use medoids (representative of a single data that located at the center). The PAM method is an outlier-proof and a robust algorithm.
+
+###Selecting k
+the dotted line indicates the optimal value of number of cluster (k)
+```{r}
+fviz_nbclust(data1, pam, method = "silhouette")
+```
+
+###Visualize
+```{r}
+pam.res <- pam(data1, 4)
+fviz_cluster(pam.res,
+             ellipse.type = "t", # Concentration ellipse
+             repel = FALSE, # Avoid label overplotting (slow)
+             ggtheme = theme_classic(),
+             labelsize = 0)
+```
+
+
+
+##CLARA
+CLARA (Clustering Large Applications). Next step clustering method of PAM that works better in a large data set (>1000 data).
+
+###Selecting k
+the dotted line indicates the optimal value of number of cluster (k)
+
+```{r}
+fviz_nbclust(data1, clara, method = "silhouette")
+```
+
+###Visualize
+
+```{r}
+clara.res <- clara(data1, 4, samples = 50, pamLike = TRUE)
+fviz_cluster(clara.res,
+             ellipse.type = "t", # Concentration ellipse
+             geom = "point", pointsize = 1,
+             ggtheme = theme_classic()
+)
+```
+
+##Export Dataframe
+
+We use pam method since the data is small and the result is good.
+```{r}
+final <- pam.res
+data1$cluster <- final$cluster
+head(data1)
+write.csv(data1, file="output sm_services_geo1.csv", row.names = TRUE)
+```
+
+
